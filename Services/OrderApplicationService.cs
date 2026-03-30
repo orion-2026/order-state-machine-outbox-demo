@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using OrderStateMachineOutboxDemo.Infrastructure;
 using OrderStateMachineOutboxDemo.Models;
 
@@ -5,16 +7,16 @@ namespace OrderStateMachineOutboxDemo.Services;
 
 public class OrderApplicationService
 {
-    private readonly InMemoryOrderStore _store;
+    private readonly AppDbContext _db;
     private readonly OrderStateMachine _stateMachine;
 
-    public OrderApplicationService(InMemoryOrderStore store, OrderStateMachine stateMachine)
+    public OrderApplicationService(AppDbContext db, OrderStateMachine stateMachine)
     {
-        _store = store;
+        _db = db;
         _stateMachine = stateMachine;
     }
 
-    public Order Create(CreateOrderRequest request)
+    public async Task<Order> CreateAsync(CreateOrderRequest request)
     {
         var order = new Order
         {
@@ -25,35 +27,42 @@ public class OrderApplicationService
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
 
-        _store.Orders[order.Id] = order;
+        _db.Orders.Add(order);
         AppendOutbox(order, "OrderCreated", new
         {
             order.Id,
             order.CustomerId,
             order.ProductSku,
             order.Quantity,
-            Status = order.Status.ToString()
+            Status = order.Status.ToString(),
+            order.Version
         });
 
+        await _db.SaveChangesAsync();
         return order;
     }
 
-    public IReadOnlyCollection<Order> ListOrders() => _store.Orders.Values.OrderBy(x => x.CreatedAtUtc).ToList();
-
-    public Order? Get(Guid id)
+    public async Task<IReadOnlyCollection<Order>> ListOrdersAsync()
     {
-        return _store.Orders.TryGetValue(id, out var order) ? order : null;
+        var orders = await _db.Orders.ToListAsync();
+        return orders.OrderBy(x => x.CreatedAtUtc).ToList();
     }
 
-    public IReadOnlyList<string>? AllowedActions(Guid id)
+    public Task<Order?> GetAsync(Guid id)
     {
-        var order = Get(id);
+        return _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
+    }
+
+    public async Task<IReadOnlyList<string>?> AllowedActionsAsync(Guid id)
+    {
+        var order = await GetAsync(id);
         return order is null ? null : _stateMachine.AllowedActions(order.Status);
     }
 
-    public (bool Success, string? Error, Order? Order) ChangeStatus(Guid id, ChangeStatusRequest request)
+    public async Task<(bool Success, string? Error, Order? Order)> ChangeStatusAsync(Guid id, ChangeStatusRequest request)
     {
-        if (!_store.Orders.TryGetValue(id, out var order))
+        var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == id);
+        if (order is null)
         {
             return (false, "Order not found.", null);
         }
@@ -79,19 +88,27 @@ public class OrderApplicationService
             order.Version
         });
 
+        await _db.SaveChangesAsync();
         return (true, null, order);
     }
 
-    public IReadOnlyCollection<OutboxEvent> ListOutbox(bool publishedOnly = false)
+    public async Task<IReadOnlyCollection<OutboxEvent>> ListOutboxAsync(bool publishedOnly = false)
     {
-        var events = _store.Outbox.ToArray().OrderBy(x => x.OccurredAtUtc);
-        return publishedOnly ? events.Where(x => x.Published).ToList() : events.ToList();
+        var query = _db.OutboxEvents.AsQueryable();
+        if (publishedOnly)
+        {
+            query = query.Where(x => x.Published);
+        }
+
+        var events = await query.ToListAsync();
+        return events.OrderBy(x => x.OccurredAtUtc).ToList();
     }
 
-    public IReadOnlyCollection<OutboxEvent> PublishPendingOutbox()
+    public async Task<IReadOnlyCollection<OutboxEvent>> PublishPendingOutboxAsync()
     {
-        var events = _store.Outbox.ToArray()
+        var events = (await _db.OutboxEvents
             .Where(x => !x.Published)
+            .ToListAsync())
             .OrderBy(x => x.OccurredAtUtc)
             .ToList();
 
@@ -101,16 +118,17 @@ public class OrderApplicationService
             evt.PublishedAtUtc = DateTimeOffset.UtcNow;
         }
 
+        await _db.SaveChangesAsync();
         return events;
     }
 
     private void AppendOutbox(Order order, string eventType, object payload)
     {
-        _store.Outbox.Enqueue(new OutboxEvent
+        _db.OutboxEvents.Add(new OutboxEvent
         {
             OrderId = order.Id,
             EventType = eventType,
-            Payload = payload
+            PayloadJson = JsonSerializer.Serialize(payload)
         });
     }
 }

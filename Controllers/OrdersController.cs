@@ -16,43 +16,43 @@ public class OrdersController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult List() => Ok(_service.ListOrders());
+    public async Task<IActionResult> List() => Ok(await _service.ListOrdersAsync());
 
     [HttpGet("{id:guid}")]
-    public IActionResult Get(Guid id)
+    public async Task<IActionResult> Get(Guid id)
     {
-        var order = _service.Get(id);
+        var order = await _service.GetAsync(id);
         return order is null ? NotFound(new { message = "Order not found." }) : Ok(order);
     }
 
     [HttpPost]
-    public IActionResult Create([FromBody] CreateOrderRequest request)
+    public async Task<IActionResult> Create([FromBody] CreateOrderRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerId) || string.IsNullOrWhiteSpace(request.ProductSku) || request.Quantity <= 0)
         {
             return BadRequest(new { message = "CustomerId, ProductSku, and positive Quantity are required." });
         }
 
-        var order = _service.Create(request);
+        var order = await _service.CreateAsync(request);
         return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
     }
 
     [HttpGet("{id:guid}/actions")]
-    public IActionResult AllowedActions(Guid id)
+    public async Task<IActionResult> AllowedActions(Guid id)
     {
-        var actions = _service.AllowedActions(id);
+        var actions = await _service.AllowedActionsAsync(id);
         return actions is null ? NotFound(new { message = "Order not found." }) : Ok(new { actions });
     }
 
     [HttpPost("{id:guid}/transitions")]
-    public IActionResult Transition(Guid id, [FromBody] ChangeStatusRequest request)
+    public async Task<IActionResult> Transition(Guid id, [FromBody] ChangeStatusRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Action))
         {
             return BadRequest(new { message = "Action is required." });
         }
 
-        var result = _service.ChangeStatus(id, request);
+        var result = await _service.ChangeStatusAsync(id, request);
         if (!result.Success)
         {
             if (result.Error == "Order not found.")

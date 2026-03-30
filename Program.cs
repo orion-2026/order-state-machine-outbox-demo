@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using OrderStateMachineOutboxDemo.Infrastructure;
 using OrderStateMachineOutboxDemo.Services;
 
@@ -5,11 +6,32 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<InMemoryOrderStore>();
-builder.Services.AddSingleton<OrderStateMachine>();
-builder.Services.AddSingleton<OrderApplicationService>();
+
+var provider = builder.Configuration["Database:Provider"] ?? "Sqlite";
+var connectionString = builder.Configuration["Database:ConnectionString"];
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    if (string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseNpgsql(connectionString);
+    }
+    else
+    {
+        options.UseSqlite(connectionString ?? "Data Source=order-demo.db");
+    }
+});
+
+builder.Services.AddScoped<OrderStateMachine>();
+builder.Services.AddScoped<OrderApplicationService>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {

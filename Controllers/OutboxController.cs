@@ -15,12 +15,12 @@ public class OutboxController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult List() => Ok(_service.ListOutbox());
+    public async Task<IActionResult> List() => Ok(await _service.ListOutboxAsync());
 
     [HttpPost("publish")]
-    public IActionResult PublishPending()
+    public async Task<IActionResult> PublishPending()
     {
-        var published = _service.PublishPendingOutbox();
+        var published = await _service.PublishPendingOutboxAsync();
         return Ok(new
         {
             publishedCount = published.Count,
