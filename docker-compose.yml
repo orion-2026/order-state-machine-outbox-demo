@@ -15,9 +15,11 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      PORT: 8080
       ASPNETCORE_ENVIRONMENT: Development
-      Database__Provider: Postgres
-      Database__ConnectionString: Host=postgres;Port=5432;Database=orders_demo;Username=postgres;Password=postgres
+      ASPNETCORE_URLS: http://+:8080
+      DATABASE_PROVIDER: Postgres
+      DATABASE_CONNECTION_STRING: Host=postgres;Port=5432;Database=orders_demo;Username=postgres;Password=postgres
     depends_on:
       - postgres
     ports:

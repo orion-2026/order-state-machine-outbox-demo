@@ -1,14 +1,24 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using OrderStateMachineOutboxDemo.Infrastructure;
 using OrderStateMachineOutboxDemo.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddOpenApi();
 
-var provider = builder.Configuration["Database:Provider"] ?? "Sqlite";
-var connectionString = builder.Configuration["Database:ConnectionString"];
+var provider = builder.Configuration["DATABASE_PROVIDER"]
+    ?? builder.Configuration["Database:Provider"]
+    ?? "Sqlite";
+var connectionString = builder.Configuration["DATABASE_CONNECTION_STRING"]
+    ?? builder.Configuration["Database:ConnectionString"]
+    ?? "Data Source=order-demo.db";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -18,7 +28,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     }
     else
     {
-        options.UseSqlite(connectionString ?? "Data Source=order-demo.db");
+        options.UseSqlite(connectionString);
     }
 });
 
