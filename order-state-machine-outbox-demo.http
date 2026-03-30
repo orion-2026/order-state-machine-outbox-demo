@@ -1,0 +1,62 @@
+@host = http://localhost:5238
+
+### health
+GET {{host}}/health
+
+### create order
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{
+  "customerId": "cust-001",
+  "productSku": "sku-demo-001",
+  "quantity": 2
+}
+
+### list orders
+GET {{host}}/api/orders
+
+### allowed actions
+GET {{host}}/api/orders/{{orderId}}/actions
+
+### pay order
+POST {{host}}/api/orders/{{orderId}}/transitions
+Content-Type: application/json
+
+{
+  "action": "pay",
+  "reason": "Payment callback received"
+}
+
+### start fulfillment
+POST {{host}}/api/orders/{{orderId}}/transitions
+Content-Type: application/json
+
+{
+  "action": "start-fulfillment",
+  "reason": "Inventory reserved"
+}
+
+### ship order
+POST {{host}}/api/orders/{{orderId}}/transitions
+Content-Type: application/json
+
+{
+  "action": "ship",
+  "reason": "Shipment created"
+}
+
+### complete order
+POST {{host}}/api/orders/{{orderId}}/transitions
+Content-Type: application/json
+
+{
+  "action": "complete",
+  "reason": "Customer received package"
+}
+
+### outbox
+GET {{host}}/api/outbox
+
+### publish outbox
+POST {{host}}/api/outbox/publish
